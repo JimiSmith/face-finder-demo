@@ -49,7 +49,7 @@ namespace FunctionsFaceDemo
                 if (httpResponse.StatusCode == HttpStatusCode.OK)
                 {
                     return JsonConvert.DeserializeObject<List<PersistedFace>>(await httpResponse.Content.ReadAsStringAsync())
-                        .Where(f => f.Confidence > 0.6);
+                        .Where(f => f.Confidence > 0.5);
                 }
             }
             return null;
