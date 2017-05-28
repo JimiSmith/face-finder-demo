@@ -8,6 +8,7 @@ using Microsoft.Azure.WebJobs.Host;
 using System.IO;
 using System.Collections.Generic;
 using System;
+using System.Collections.Specialized;
 
 namespace FunctionsFaceDemo
 {
@@ -50,7 +51,12 @@ namespace FunctionsFaceDemo
                                                                        [Table("faces", Connection = "AzureWebJobsStorage")] IQueryable<FaceRectangle> faces,
                                                                        TraceWriter log)
         {
-            var imageStream = await req.Content.ReadAsStreamAsync();
+            var formData = await req.Content.ReadAsMultipartAsync();
+            var imageStream = await formData.Contents.FirstOrDefault(f => f.Headers.ContentType.MediaType.StartsWith("image/"))?.ReadAsStreamAsync();
+            if (imageStream == null)
+            {
+                return req.CreateErrorResponse(HttpStatusCode.BadRequest, "No image specified");
+            }
             var recognizedFaces = await FaceApi.GetFaces(imageStream);
             var persistedFaces = new List<FaceRectangle>();
             foreach (var face in recognizedFaces)
@@ -74,10 +80,15 @@ namespace FunctionsFaceDemo
                                                                   Binder binder,
                                                                   TraceWriter log)
         {
-            var image = await req.Content.ReadAsStreamAsync();
+            var formData = await req.Content.ReadAsMultipartAsync();
+            var imageStream = await formData.Contents.FirstOrDefault(f => f.Headers.ContentType.MediaType.StartsWith("image/"))?.ReadAsStreamAsync();
+            if (imageStream == null)
+            {
+                return req.CreateErrorResponse(HttpStatusCode.BadRequest, "No image specified");
+            }
             using (var writer = await binder.BindAsync<Stream>(new BlobAttribute($"faces/{Guid.NewGuid()}", FileAccess.Write)))
             {
-                await image.CopyToAsync(writer);
+                await imageStream.CopyToAsync(writer);
             }
             return req.CreateResponse(HttpStatusCode.OK);
         }
