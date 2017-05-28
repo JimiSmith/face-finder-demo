@@ -30,7 +30,8 @@ namespace FunctionsFaceDemo
                 foreach (var face in faces)
                 {
                     // get a thumbnail of the face
-                    var cloudBlob = await binder.BindAsync<CloudBlockBlob>(new BlobAttribute($"faces/thumbnail/{name}", FileAccess.ReadWrite));
+                    var thumbnailFileName = Guid.NewGuid();
+                    var cloudBlob = await binder.BindAsync<CloudBlockBlob>(new BlobAttribute($"faces/thumbnail/{thumbnailFileName}", FileAccess.ReadWrite));
                     using (var inputMemoryStream = new MemoryStream())
                     using (var memoryStream = new MemoryStream())
                     {
@@ -47,7 +48,8 @@ namespace FunctionsFaceDemo
                                 face.FaceRectangle.Top,
                                 face.FaceRectangle.Left + face.FaceRectangle.Width,
                                 face.FaceRectangle.Top + face.FaceRectangle.Height,
-                            }
+                            },
+                            OutputFormat = OutputFormat.Png
                         });
                         job.Build();
                         memoryStream.Position = 0;
@@ -74,7 +76,7 @@ namespace FunctionsFaceDemo
                     faceRectangle.RowKey = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(DateTimeOffset.UtcNow.ToString()));
                     faceRectangle.PartitionKey = face.FaceId.ToString();
                     faceRectangle.FaceUrl = imageFile.Uri.ToString();
-                    faceRectangle.FaceThumbnailUrl = $"https://{imageFile.Uri.Host}/faces/thumbnail/{name}";
+                    faceRectangle.FaceThumbnailUrl = $"https://{imageFile.Uri.Host}/faces/thumbnail/{thumbnailFileName}";
                     await outTable.AddAsync(faceRectangle);
                 }
             }
