@@ -8,7 +8,8 @@ using Microsoft.Azure.WebJobs.Host;
 using System.IO;
 using System.Collections.Generic;
 using System;
-using System.Collections.Specialized;
+using ImageResizer;
+using Microsoft.WindowsAzure.Storage.Blob;
 
 namespace FunctionsFaceDemo
 {
@@ -57,6 +58,10 @@ namespace FunctionsFaceDemo
             {
                 return req.CreateErrorResponse(HttpStatusCode.BadRequest, "No image specified");
             }
+            if (imageStream.Length > 4 * 1024 * 1024)
+            {
+                return req.CreateErrorResponse(HttpStatusCode.BadRequest, "Image too large");
+            }
             var recognizedFaces = await FaceApi.GetFaces(imageStream);
             var persistedFaces = new List<FaceRectangle>();
             foreach (var face in recognizedFaces)
@@ -86,9 +91,30 @@ namespace FunctionsFaceDemo
             {
                 return req.CreateErrorResponse(HttpStatusCode.BadRequest, "No image specified");
             }
-            using (var writer = await binder.BindAsync<Stream>(new BlobAttribute($"faces/{Guid.NewGuid()}", FileAccess.Write)))
+            if (imageStream.Length > 4 * 1024 * 1024)
             {
-                await imageStream.CopyToAsync(writer);
+                return req.CreateErrorResponse(HttpStatusCode.BadRequest, "Image too large");
+            }
+            using (var inputMemoryStream = new MemoryStream())
+            using (var memoryStream = new MemoryStream())
+            {
+                imageStream.CopyTo(inputMemoryStream);
+                imageStream.Position = 0;
+                inputMemoryStream.Position = 0;
+                var job = new ImageJob(inputMemoryStream, memoryStream, new Instructions
+                {
+                    Width = 1440,
+                    Height = 1440,
+                    Mode = FitMode.Max,
+                    AutoRotate = true,
+                    OutputFormat = OutputFormat.Png
+                });
+                job.Build();
+                memoryStream.Position = 0;
+                var cloudBlob = await binder.BindAsync<CloudBlockBlob>(new BlobAttribute($"faces/{Guid.NewGuid()}", FileAccess.ReadWrite));
+                await cloudBlob.UploadFromStreamAsync(memoryStream).ConfigureAwait(false);
+                cloudBlob.Properties.ContentType = "image/png";
+                await cloudBlob.SetPropertiesAsync().ConfigureAwait(false);
             }
             return req.CreateResponse(HttpStatusCode.OK);
         }
